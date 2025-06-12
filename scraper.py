@@ -27,55 +27,55 @@ def run_search_scraper(queries_path, api_key):
 
     seen_domains = set()
     all_fields = set()
+    all_rows = []
 
     print(f"🔎 Starting scrape for {len(queries)} queries")
 
-    with open(output_path, "w", newline='', encoding='utf-8') as f:
-        writer = None
-        for idx, query in enumerate(queries, 1):
-            print(f"\n[{idx}/{len(queries)}] Query: {query}")
-            page = 1
+    for idx, query in enumerate(queries, 1):
+        print(f"\n[{idx}/{len(queries)}] Query: {query}")
+        page = 1
 
-            while True:
-                payload = {"q": query, "page": page}
-                headers = {
-                    "X-API-KEY": api_key,
-                    "Content-Type": "application/json"
-                }
+        while True:
+            payload = {"q": query, "page": page}
+            headers = {
+                "X-API-KEY": api_key,
+                "Content-Type": "application/json"
+            }
 
-                try:
-                    response = requests.post(SERPER_ENDPOINT, json=payload, headers=headers, timeout=10)
-                    response.raise_for_status()
-                    data = response.json()
-                    organic = data.get("organic", [])
+            try:
+                response = requests.post(SERPER_ENDPOINT, json=payload, headers=headers, timeout=10)
+                response.raise_for_status()
+                data = response.json()
+                organic = data.get("organic", [])
 
-                    if not organic:
-                        break
-
-                    rows = []
-                    for result in organic:
-                        url = result.get("link", "")
-                        domain = normalize_domain(url)
-                        if not domain or domain in seen_domains:
-                            continue
-
-                        seen_domains.add(domain)
-                        result["normalized_domain"] = domain
-                        result["query"] = query
-                        all_fields.update(result.keys())
-                        rows.append(result)
-
-                    if rows:
-                        if writer is None:
-                            writer = csv.DictWriter(f, fieldnames=list(all_fields))
-                            writer.writeheader()
-                        writer.writerows(rows)
-
-                    print(f"→ Page {page} returned {len(rows)} new domains")
-                    page += 1
-                except Exception as e:
-                    print(f"❌ Error on page {page}: {e}")
+                if not organic:
                     break
+
+                rows = []
+                for result in organic:
+                    url = result.get("link", "")
+                    domain = normalize_domain(url)
+                    if not domain or domain in seen_domains:
+                        continue
+
+                    seen_domains.add(domain)
+                    result["normalized_domain"] = domain
+                    result["query"] = query
+                    all_fields.update(result.keys())
+                    rows.append(result)
+
+                all_rows.extend(rows)
+                print(f"→ Page {page} returned {len(rows)} new domains")
+                page += 1
+            except Exception as e:
+                print(f"❌ Error on page {page}: {e}")
+                break
+
+    if all_rows:
+        with open(output_path, "w", newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=list(all_fields))
+            writer.writeheader()
+            writer.writerows(all_rows)
 
     print(f"\n✅ Done. {len(seen_domains)} unique domains written to {output_path}")
     return output_path
