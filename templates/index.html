@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Google Search Scraper (powered by serper.dev)</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 40px;
+      background-color: #f9f9f9;
+      color: #333;
+    }
+    h1, h2 {
+      text-align: center;
+      color: #2a2a2a;
+    }
+    .upload-box {
+      border: 2px dashed #ccc;
+      border-radius: 12px;
+      padding: 20px;
+      background: #fff;
+      text-align: center;
+      margin: 20px auto;
+      width: 400px;
+    }
+    input[type="file"], input[type="password"] {
+      display: block;
+      margin: 10px auto;
+    }
+    .button {
+      padding: 10px 20px;
+      font-size: 16px;
+      border-radius: 6px;
+      border: none;
+      background-color: #007BFF;
+      color: white;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>Google Search Scraper (powered by serper.dev)</h1>
+  <form action="/search" method="post" enctype="multipart/form-data">
+    <div class="upload-box">
+      <label><strong>Upload your <code>queries.csv</code></strong></label>
+      <input type="file" name="queries" required>
+    </div>
+    <div class="upload-box">
+      <label><strong>Enter your <code>Serper.dev API Key</code></strong></label>
+      <input type="password" name="serper_api_key" required>
+    </div>
+    <div style="text-align: center;">
+      <button type="submit" class="button">Run Scraper</button>
+    </div>
+  </form>
+</body>
+</html>
