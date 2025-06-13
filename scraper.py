@@ -93,8 +93,7 @@ def fetch_query(query, index, total, api_key):
 
     with lock:
         completed_counter += 1
-        if completed_counter % 100 == 0 or completed_counter == total:
-            print(f"✅ Completed {completed_counter}/{total} queries. Current unique domains: {len(seen_domains)}", flush=True)
+        print(f"✅ Completed {completed_counter}/{total} queries. Total unique businesses: {len(seen_domains)} | API credits used: {api_call_count}", flush=True)
 
 def run_search_scraper(queries_path, api_key):
     queries = load_queries(queries_path)
