@@ -18,6 +18,7 @@ seen_domains = set()
 all_fields = set()
 all_rows = []
 completed_counter = 0
+api_call_count = 0
 
 if QPS_LIMIT:
     semaphore = threading.Semaphore(QPS_LIMIT)
@@ -37,7 +38,7 @@ def load_queries(path):
         return [row[0] for row in reader if row]
 
 def fetch_query(query, index, total, api_key):
-    global completed_counter
+    global completed_counter, api_call_count
     print(f"\n[{index}/{total}] Query: {query}", flush=True)
 
     session = requests.Session()
@@ -55,6 +56,8 @@ def fetch_query(query, index, total, api_key):
         payload = {"q": query, "page": page}
         try:
             response = session.post(SERPER_ENDPOINT, json=payload, timeout=10)
+            with lock:
+                api_call_count += 1
             response.raise_for_status()
             data = response.json()
             organic = data.get("organic", [])
@@ -91,12 +94,14 @@ def fetch_query(query, index, total, api_key):
     with lock:
         completed_counter += 1
         if completed_counter % 100 == 0 or completed_counter == total:
-            print(f"✅ Completed {completed_counter}/{total} queries. Unique domains: {len(seen_domains)}", flush=True)
+            print(f"✅ Completed {completed_counter}/{total} queries. Current unique domains: {len(seen_domains)}", flush=True)
 
 def run_search_scraper(queries_path, api_key):
     queries = load_queries(queries_path)
     session_id = str(uuid.uuid4())
-    output_path = os.path.join(UPLOADS_DIR, f"{session_id}.csv")
+    session_dir = os.path.join(UPLOADS_DIR, session_id)
+    os.makedirs(session_dir, exist_ok=True)
+    output_path = os.path.join(session_dir, "output.csv")
 
     print(f"🔎 Starting scrape for {len(queries)} queries with up to {MAX_WORKERS} workers", flush=True)
 
@@ -106,16 +111,16 @@ def run_search_scraper(queries_path, api_key):
             for idx, query in enumerate(queries)
         ]
         for _ in as_completed(futures):
-            pass  # Completion counter is tracked internally
+            pass
 
     if all_rows:
-        os.makedirs(UPLOADS_DIR, exist_ok=True)
         with open(output_path, "w", newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=list(all_fields))
             writer.writeheader()
             writer.writerows(all_rows)
 
     print(f"\n✅ Done! Wrote {len(seen_domains)} deduplicated domains to '{output_path}'", flush=True)
+    print(f"📊 Total API calls made to Serper: {api_call_count}", flush=True)
     print(f"✅ Download your results here: {BASE_URL}/download/{session_id}", flush=True)
 
-    return output_path
+    return session_id
