@@ -72,6 +72,7 @@ def run_search_scraper(queries_path, api_key):
                 break
 
     if all_rows:
+        os.makedirs(UPLOADS_DIR, exist_ok=True)
         with open(output_path, "w", newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=list(all_fields))
             writer.writeheader()
