@@ -4,19 +4,20 @@ import os
 import uuid
 import tldextract
 import threading
-from urllib.parse import urlparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from time import sleep
 
 SERPER_ENDPOINT = "https://google.serper.dev/search"
 UPLOADS_DIR = "uploads"
 MAX_WORKERS = 200
-QPS_LIMIT = None  # Set to an int (e.g., 5) to enforce QPS throttling
+QPS_LIMIT = None  # Optional: set to int like 5 for throttling
+BASE_URL = "https://searchscraper.onrender.com"
 
 lock = threading.Lock()
 seen_domains = set()
 all_fields = set()
 all_rows = []
+completed_counter = 0
 
 if QPS_LIMIT:
     semaphore = threading.Semaphore(QPS_LIMIT)
@@ -36,7 +37,9 @@ def load_queries(path):
         return [row[0] for row in reader if row]
 
 def fetch_query(query, index, total, api_key):
+    global completed_counter
     print(f"\n[{index}/{total}] Query: {query}", flush=True)
+
     session = requests.Session()
     session.headers.update({
         "X-API-KEY": api_key,
@@ -44,57 +47,51 @@ def fetch_query(query, index, total, api_key):
     })
 
     page = 1
-    local_rows = []
-
     while True:
         if semaphore:
             with semaphore:
                 sleep(1.0 / QPS_LIMIT)
-                payload = {"q": query, "page": page}
-                try:
-                    response = session.post(SERPER_ENDPOINT, json=payload, timeout=10)
-                except Exception as e:
-                    print(f"❌ Request failed on page {page}: {e}", flush=True)
-                    break
-        else:
-            payload = {"q": query, "page": page}
-            try:
-                response = session.post(SERPER_ENDPOINT, json=payload, timeout=10)
-            except Exception as e:
-                print(f"❌ Request failed on page {page}: {e}", flush=True)
-                break
 
+        payload = {"q": query, "page": page}
         try:
+            response = session.post(SERPER_ENDPOINT, json=payload, timeout=10)
             response.raise_for_status()
             data = response.json()
             organic = data.get("organic", [])
-            if not organic:
-                break
-
-            new_domains = 0
-            for result in organic:
-                url = result.get("link", "")
-                domain = normalize_domain(url)
-                if not domain:
-                    continue
-
-                with lock:
-                    if domain in seen_domains:
-                        continue
-                    seen_domains.add(domain)
-
-                result["normalized_domain"] = domain
-                result["query"] = query
-                with lock:
-                    all_fields.update(result.keys())
-                    all_rows.append(result)
-                new_domains += 1
-
-            print(f"→ Page {page} returned {new_domains} new domains", flush=True)
-            page += 1
         except Exception as e:
             print(f"❌ Error on page {page}: {e}", flush=True)
             break
+
+        if not organic:
+            break
+
+        new_domains = 0
+        for result in organic:
+            url = result.get("link", "")
+            domain = normalize_domain(url)
+            if not domain:
+                continue
+
+            with lock:
+                if domain in seen_domains:
+                    continue
+                seen_domains.add(domain)
+
+            result["normalized_domain"] = domain
+            result["query"] = query
+
+            with lock:
+                all_fields.update(result.keys())
+                all_rows.append(result)
+            new_domains += 1
+
+        print(f"→ Page {page} returned {new_domains} new domains", flush=True)
+        page += 1
+
+    with lock:
+        completed_counter += 1
+        if completed_counter % 100 == 0 or completed_counter == total:
+            print(f"✅ Completed {completed_counter}/{total} queries. Unique domains: {len(seen_domains)}", flush=True)
 
 def run_search_scraper(queries_path, api_key):
     queries = load_queries(queries_path)
@@ -108,9 +105,8 @@ def run_search_scraper(queries_path, api_key):
             executor.submit(fetch_query, query, idx + 1, len(queries), api_key)
             for idx, query in enumerate(queries)
         ]
-
-        for future in as_completed(futures):
-            pass  # All print and data collection is handled inside `fetch_query`
+        for _ in as_completed(futures):
+            pass  # Completion counter is tracked internally
 
     if all_rows:
         os.makedirs(UPLOADS_DIR, exist_ok=True)
@@ -119,5 +115,7 @@ def run_search_scraper(queries_path, api_key):
             writer.writeheader()
             writer.writerows(all_rows)
 
-    print(f"\n✅ Done. {len(seen_domains)} unique domains written to {output_path}", flush=True)
+    print(f"\n✅ Done! Wrote {len(seen_domains)} deduplicated domains to '{output_path}'", flush=True)
+    print(f"✅ Download your results here: {BASE_URL}/download/{session_id}", flush=True)
+
     return output_path
