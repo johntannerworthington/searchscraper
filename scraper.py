@@ -9,8 +9,8 @@ from time import sleep
 
 SERPER_ENDPOINT = "https://google.serper.dev/search"
 UPLOADS_DIR = "uploads"
-MAX_WORKERS = 200
-QPS_LIMIT = None  # Set to an integer like 5 if throttling is needed
+MAX_WORKERS = 300
+QPS_LIMIT = 270  # Set to an integer like 5 if throttling is needed
 BASE_URL = "https://searchscraper.onrender.com"
 
 lock = threading.Lock()
