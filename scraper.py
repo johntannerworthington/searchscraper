@@ -57,7 +57,7 @@ def fetch_query(query, index, total, api_key):
             with semaphore:
                 sleep(1.0 / QPS_LIMIT)
 
-        payload = {"q": query, "num": 100}
+        payload = {"q": query, "num": 10}
         if page > 1:
             payload["page"] = page
 
